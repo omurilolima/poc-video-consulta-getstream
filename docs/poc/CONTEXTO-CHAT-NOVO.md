@@ -42,7 +42,7 @@ Ordem esperada em alto nível: `criada` → `aguardando` → `midia_pendente` �
 - **Não usar Expo Go** — precisa dev build: `npx expo run:android` (mudanças nativas = rebuild).
 - API: `mobile/services/api.ts`. **Android emulador:** `http://10.0.2.2:3000`. **Celular Wi‑Fi:** constante **`DEV_MACHINE_LAN_IP`** (alinhar ao IP da máquina que aparece no Metro). Alternativa físico: `adb reverse tcp:3000 tcp:3000` + localhost se aplicável conforme código.
 - Lobby: criar sessão em **dois passos** (mostrar/compartilhar sessionId → “Entrar na chamada”).
-- Chamada (`CallScreen.tsx`): `StreamVideo` + `StreamCall` envolvendo conteúdo; join após permissões Android `CAMERA`/`RECORD_AUDIO` onde aplicável; **`FloatingParticipantView={() => null}`** no `CallContent` para evitar crash Reanimated (`inputRange`), controles Stream com wrapper + `paddingBottom` via **safe-area insets**.
+- Chamada (`CallScreen.tsx`): `StreamVideoClient.getOrCreateInstance()` + `StreamCall`; fluxo **`callManager.start()` → `call.join()` → `camera.enable()` / `microphone.enable()`** (publicar antes do join não envia mídia ao SFU); permissões Android obrigatórias antes do join; vídeo com **`RTCView`** + assinatura remota via `updateParticipant` / `updateParticipantTracks` / `trackSubscriptionManager.apply(IMMEDIATE)` quando `publishedTracks` existe mas `videoStream` não; controles Stream com wrapper + `paddingBottom` via **safe-area insets**; `newArchEnabled: false`, `minSdkVersion: 24`.
 - Tokens / user: servidor faz `upsertUsers` antes do token.
 
 ### Web médico (`web/`)
@@ -51,6 +51,8 @@ Ordem esperada em alto nível: `criada` → `aguardando` → `midia_pendente` �
 - `web/src/app/services/api.service.ts`: **`BACKEND_URL = http://localhost:3000`** — se o browser estiver em outra máquina, trocar para IP/host acessível.
 - Fluxo igual: criar sessão → copiar ID → entrar quando pronto.
 - **`publishedTracks`** no browser pode diferir da forma numérica do RN ao checar vídeo/áudio — código tenta cobrir enum/string para disparar `media-ready`.
+- Ordem mídia: **`join()` → `camera.enable()` / `microphone.enable()`** (igual mobile).
+- Vídeo: **`call.bindVideoElement` / `bindAudioElement`** na directive — não basta `srcObject`.
 - Controles toggles mic/câmera na UI onde implementados (`call.microphone.toggle` / `camera.toggle`).
 
 ### Segurança PoC
@@ -61,9 +63,12 @@ Backend devolve `apiKey` com o token aos clientes — aceitável para laboratór
 
 - Erro RN “user token is not set”: **montar `StreamVideo`/`StreamCall` antes** do fluxo que faz `join` (wrapper interno loading/join/error).
 - `useCall()` undefined se desestruturado errado de `useCallStateHooks` — passar instância **`call`** de `client.call(...)` como prop quando precisar de `camera.enable`.
+- **Vídeo bidirecional (resolvido):** join antes de enable; web com `bindVideoElement`; mobile com `RTCView` + assinatura explícita de track remoto. Evitar `useEffect` que chama `updateParticipant` com dependência instável em `remoteParticipants` (causava loop “Maximum update depth exceeded”).
+- **`ParticipantView` sem `style`:** pode renderizar 0×0; PoC usa `RTCView` com layout explícito.
 - Clipboard nativo opcional falhou antes — lobby mobile usa **`Share`** + campo selecionável.
 - Copiar session ID na web: risco de colar **`:`** no fim → sanitização em **`joinExisting`** (web e mobile onde aplicável).
-- Android: permissões declaradas em `mobile/android/app/src/main/AndroidManifest.xml` + política rede dev em `network_security_config.xml`.
+- Android: permissões em runtime + `mobile/android/app/src/main/AndroidManifest.xml`; **`newArchEnabled=false`**; rede dev em `network_security_config.xml`.
+- Dashboard GetStream demo **`livestream`:** credenciais/call type de teste — **não usar** na PoC (`default` + `.env` raiz).
 
 ## Como rodar rápido
 
@@ -82,11 +87,11 @@ cd mobile && npx expo start
 ./scripts/test-poc-scenarios.sh
 ```
 
-Fluxo típico teste: web cria sessão → paciente mobile cola UUID → médico web entra na chamada quando quiser → aceitar permissões de mídia.
+Fluxo típico teste: web cria sessão → paciente mobile cola UUID → médico web entra na chamada quando quiser → aceitar permissões de mídia → **ambos devem ver e ouvir o outro**.
 
 ## Histórico desta série de chats
 
-Documentação sincronizada com o código em várias iterações: Angular médico, endpoint `/joined`, layout RN sem floating PiP SDK, permissões Android, IPs LAN vs emulador, plano PoC atualizado para incluir Angular. Detalhes de troubleshooting antigos ficam distribuídos em commits/logs e nos READMEs pós‑atualização.
+Documentação sincronizada com o código em várias iterações: Angular médico, endpoint `/joined`, layout RN, permissões Android, IPs LAN vs emulador, plano PoC com Angular. **Maio/2026:** corrigido bug de mídia bidirecional (ordem join/enable, binding web, RTCView + subscription mobile); PoC validada médico web + paciente mobile.
 
 ---
 

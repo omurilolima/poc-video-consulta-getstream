@@ -16,7 +16,7 @@ O paciente usa o app em [../mobile](../mobile).
 
 - Criar ou entrar como `medico` numa sessão existente
 - Fluxo lobby em **dois passos** ao criar: obter dados → copiar/compartilhar `sessionId` → **Entrar na chamada**
-- Renderizar vídeo local/remoto ligando `MediaStream` a `<video>` (directive `videoStream`)
+- Renderizar vídeo local/remoto com **`call.bindVideoElement()` / `call.bindAudioElement()`** (directive `streamVideoTrack` / `streamAudioTrack`; fallback `videoStream` com `srcObject`)
 - Botões para **alternar mic e câmera** (`call.microphone.toggle()` / `call.camera.toggle()`)
 - Badge de estado com polling (~3 s) em `GET /sessions/:id`
 - Encerrar / encerrar com veto C4 (`POST …/end`)
@@ -51,6 +51,19 @@ Abre em `http://localhost:4200` (Angular CLI).
 4. No celular (`mobile`), paciente cola Session ID sem caractere `:` extra copiado do rótulo (o lobby pode sanitizar `: ` no final do ID).
 5. Conceder permissões de mídia no browser na primeira vez.
 6. Ao terminar: **Encerrar** ou **Encerrar + Vetar (C4)**.
+
+---
+
+## Mídia GetStream (web)
+
+Ordem no `CallComponent`:
+
+1. `StreamVideoClient` + `client.call(callType, callId)`
+2. **`await call.join()`** — publicação só funciona com `CallingState === JOINED`
+3. **`call.camera.enable()` / `call.microphone.enable()`** — publicação explícita
+4. `api.notifyJoined`
+
+**Renderização:** a directive `VideoStreamDirective` liga cada `<video>` / `<audio>` ao SDK via `bindVideoElement` / `bindAudioElement` (session id do participante + tipo de track). Atribuir só `srcObject` não dispara subscription/dynascale — por isso o binding explícito é obrigatório na PoC.
 
 ---
 
