@@ -35,7 +35,7 @@ export class CallComponent implements OnInit, OnDestroy {
   camEnabled = signal(true);
 
   private client?: StreamVideoClient;
-  private call?: ReturnType<StreamVideoClient['call']>;
+  call?: ReturnType<StreamVideoClient['call']>;
   private pollInterval?: ReturnType<typeof setInterval>;
   private participantsSub?: { unsubscribe(): void };
 
@@ -48,17 +48,6 @@ export class CallComponent implements OnInit, OnDestroy {
       });
 
       this.call = this.client.call(this.params.callType, this.params.callId);
-
-      await this.call.join({ create: false });
-
-      // Ativa câmera e microfone — o SDK web não faz isso automaticamente
-      await Promise.allSettled([
-        this.call.camera.enable().then(() => console.log('Câmera ativada na Web')),
-        this.call.microphone.enable().then(() => console.log('Mic ativado na Web')),
-      ]);
-
-      this.joining.set(false);
-      await api.notifyJoined(this.params.sessionId, this.params.userId);
 
       // Observa participantes: atualiza lista e sinaliza mediaReady apenas quando
       // o participante remoto publicar tracks de áudio e vídeo.
@@ -96,6 +85,25 @@ export class CallComponent implements OnInit, OnDestroy {
           }
         }
       });
+
+      await this.call.join({ create: false });
+
+      // The Stream JS SDK publishes devices when enable() runs after join.
+      const mediaResults = await Promise.allSettled([
+        this.call.camera.enable().then(() => console.log('Câmera publicada na Web')),
+        this.call.microphone.enable().then(() => console.log('Mic publicado na Web')),
+      ]);
+
+      for (const result of mediaResults) {
+        if (result.status === 'rejected') {
+          console.warn('Falha ao publicar mídia na Web', result.reason);
+        }
+      }
+
+      this.camEnabled.set(this.call.camera.state.status === 'enabled');
+      this.micEnabled.set(this.call.microphone.state.status === 'enabled');
+      this.joining.set(false);
+      await api.notifyJoined(this.params.sessionId, this.params.userId);
 
       this.startPolling();
     } catch (e) {
@@ -174,6 +182,24 @@ export class CallComponent implements OnInit, OnDestroy {
     } catch (e) {
       console.warn('Erro ao alternar câmera', e);
     }
+  }
+
+  hasPublishedVideo(participant: StreamVideoParticipant): boolean {
+    return this.hasPublishedTrack(participant, 2, 'video');
+  }
+
+  hasPublishedAudio(participant: StreamVideoParticipant): boolean {
+    return this.hasPublishedTrack(participant, 1, 'audio');
+  }
+
+  private hasPublishedTrack(
+    participant: StreamVideoParticipant,
+    numericTrack: number,
+    textTrack: string,
+  ): boolean {
+    return (participant.publishedTracks ?? []).some((track) => {
+      return track === numericTrack || String(track).toLowerCase().includes(textTrack);
+    });
   }
 
   stateBadgeClass(): string {

@@ -97,6 +97,23 @@ Eventos: `call.session_participant_joined`, `call.session_participant_left`, `ca
 3. Web: clicar **Entrar na chamada** com os dados já obtidos ao criar a sessão.
 4. Aceitar permissões de câmera/microfone em ambos quando o SO pedir.
 
+**Resultado esperado:** vídeo e áudio bidirecionais (médico vê paciente e vice-versa). Se um lado mostrar tile vazio com `stream: nao` no overlay de debug do mobile, confira a ordem join → enable descrita abaixo.
+
+---
+
+## Mídia GetStream — decisões que fizeram a PoC funcionar
+
+| Plataforma | Problema | Solução |
+|------------|----------|---------|
+| **Web + Mobile** | Habilitar câmera/mic **antes** de `call.join()` captura stream local, mas o SDK só chama `publishStream()` com `CallingState === JOINED` | Sempre **`join()` primeiro**, depois `camera.enable()` / `microphone.enable()` |
+| **Web** | Atribuir `srcObject` manualmente não aciona subscription/dynascale do SDK | Usar `call.bindVideoElement()` / `call.bindAudioElement()` via directive (`streamVideoTrack` / `streamAudioTrack`) |
+| **Mobile** | `ParticipantView` sem dimensões pode renderizar com tamanho zero; `RTCView` direto sem assinatura deixa tracks publicados sem `videoStream` | `RTCView` com layout explícito + `updateParticipant` / `updateParticipantTracks` + `trackSubscriptionManager.apply(IMMEDIATE)` para o remoto |
+| **Mobile (Android)** | New Architecture + WebRTC instável em alguns devices | `newArchEnabled: false` em `app.json` e `android/gradle.properties`; `minSdkVersion: 24` via `expo-build-properties` |
+
+Detalhes por cliente: [web/README.md](./web/README.md) · [mobile/README.md](./mobile/README.md).
+
+> **Dashboard GetStream:** o demo `livestream` do painel usa call type e credenciais de teste diferentes — **não usar** na PoC (call type `default` + `.env` próprio).
+
 ---
 
 ## Escopo — Épicos e histórias

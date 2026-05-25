@@ -21,9 +21,12 @@
       }
       @for (p of remoteParticipants(); track p.userId) {
         <div class="video-wrapper">
-          @if (p.videoStream) {
+          @if (hasPublishedVideo(p) || p.videoStream) {
             <video
-              [videoStream]="p.videoStream"
+              streamVideoTrack
+              [streamCall]="call"
+              [participantSessionId]="p.sessionId"
+              streamTrackType="videoTrack"
               autoplay
               playsinline
               muted
@@ -32,9 +35,12 @@
           } @else {
             <div class="no-video">Sem vídeo</div>
           }
-          @if (p.audioStream) {
+          @if (hasPublishedAudio(p) || p.audioStream) {
             <audio
-              [videoStream]="p.audioStream"
+              streamAudioTrack
+              [streamCall]="call"
+              [participantSessionId]="p.sessionId"
+              streamTrackType="audioTrack"
               autoplay
             ></audio>
           }
@@ -47,9 +53,12 @@
     <!-- Local preview (self) -->
     @if (localParticipant()) {
       <div class="video-self">
-        @if (localParticipant()!.videoStream) {
+        @if (hasPublishedVideo(localParticipant()!) || localParticipant()!.videoStream) {
           <video
-            [videoStream]="localParticipant()!.videoStream"
+            streamVideoTrack
+            [streamCall]="call"
+            [participantSessionId]="localParticipant()!.sessionId"
+            streamTrackType="videoTrack"
             autoplay
             playsinline
             muted
