@@ -1,0 +1,95 @@
+@if (joining()) {
+  <div class="status-screen">
+    <div class="spinner"></div>
+    <p>Conectando à chamada…</p>
+  </div>
+} @else if (joinError()) {
+  <div class="status-screen status-error">
+    <p class="error-title">Erro ao entrar na chamada</p>
+    <p class="error-msg">{{ joinError() }}</p>
+    <button class="btn btn-secondary" (click)="leaveCall()">Voltar</button>
+  </div>
+} @else {
+  <div class="call-layout">
+
+    <!-- Remote participants (patient video) -->
+    <div class="video-main">
+      @if (remoteParticipants().length === 0) {
+        <div class="waiting-remote">
+          <p>Aguardando o paciente entrar…</p>
+        </div>
+      }
+      @for (p of remoteParticipants(); track p.userId) {
+        <div class="video-wrapper">
+          @if (p.videoStream) {
+            <video
+              [videoStream]="p.videoStream"
+              autoplay
+              playsinline
+              muted
+              class="video-el"
+            ></video>
+          } @else {
+            <div class="no-video">Sem vídeo</div>
+          }
+          @if (p.audioStream) {
+            <audio
+              [videoStream]="p.audioStream"
+              autoplay
+            ></audio>
+          }
+          <span class="video-label">{{ p.userId }}</span>
+        </div>
+      }
+
+    </div>
+
+    <!-- Local preview (self) -->
+    @if (localParticipant()) {
+      <div class="video-self">
+        @if (localParticipant()!.videoStream) {
+          <video
+            [videoStream]="localParticipant()!.videoStream"
+            autoplay
+            playsinline
+            muted
+            class="video-el"
+          ></video>
+        } @else {
+          <div class="no-video-local">Câmera desligada</div>
+        }
+        <span class="video-label">{{ params.userId }} (você)</span>
+      </div>
+    }
+
+    <!-- Web Controls (Mic/Cam) -->
+    <div class="media-controls">
+      <button class="btn-media" (click)="toggleMic()">
+        {{ micEnabled() ? 'Desativar Mic' : 'Ativar Mic' }}
+      </button>
+      <button class="btn-media" (click)="toggleCam()">
+        {{ camEnabled() ? 'Desativar Câmera' : 'Ativar Câmera' }}
+      </button>
+    </div>
+
+    <!-- Controls overlay -->
+    <div class="controls">
+      <div class="controls-left">
+        <span class="badge" [class]="stateBadgeClass()">{{ stateLabel() }}</span>
+        <span class="session-id-small">{{ params.sessionId }}</span>
+      </div>
+      <div class="controls-right">
+        <button class="btn btn-danger" (click)="endCall(false)" [disabled]="ending()">
+          Encerrar
+        </button>
+        <button class="btn btn-veto" (click)="endCall(true)" [disabled]="ending()">
+          Encerrar + Vetar (C4)
+        </button>
+        <button class="btn btn-secondary" (click)="leaveCall()" [disabled]="ending()">
+          Sair
+        </button>
+      </div>
+    </div>
+
+  </div>
+}

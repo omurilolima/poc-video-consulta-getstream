@@ -1,0 +1,161 @@
+.lobby {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f4f8;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0 0 8px;
+}
+
+.alert {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #856404;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #343a40;
+}
+
+.input {
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: #0d6efd;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #0d6efd;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0b5ed7;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #fff;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #5c636a;
+}
+
+.pending-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-enter {
+  background: #198754;
+  color: #fff;
+}
+
+.btn-enter:hover:not(:disabled) {
+  background: #157347;
+}
+
+.session-id-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e9f3ff;
+  border: 1px solid #b6d4fe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.session-id-label {
+  font-size: 13px;
+  color: #084298;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.session-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: #084298;
+  flex: 1;
+  word-break: break-all;
+}
+
+.btn-copy {
+  background: #0d6efd;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-copy:hover {
+  background: #0b5ed7;
+}
+
+.divider {
+  text-align: center;
+  color: #adb5bd;
+  font-size: 13px;
+  padding: 4px 0;
+}

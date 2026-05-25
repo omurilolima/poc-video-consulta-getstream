@@ -1,0 +1,51 @@
+<div class="lobby">
+  <div class="card">
+    <h1 class="title">POC Videoconsulta</h1>
+    <p class="subtitle">Interface do <strong>Médico</strong> — GetStream Video</p>
+
+    @if (error()) {
+      <div class="alert">{{ error() }}</div>
+    }
+
+    <label class="label">Seu userId</label>
+    <input
+      class="input"
+      [ngModel]="userId()"
+      (ngModelChange)="userId.set($event)"
+      placeholder="ex: medico-01"
+    />
+
+    <button class="btn btn-primary" (click)="createSession()" [disabled]="loading()">
+      @if (loading()) { Carregando… } @else { Criar nova sessão }
+    </button>
+
+    @if (pending()) {
+      <div class="pending-block">
+        <div class="session-id-box">
+          <span class="session-id-label">Session ID criada:</span>
+          <code class="session-id">{{ pending()!.sessionId }}</code>
+          <button class="btn-copy" (click)="copySessionId()">
+            {{ copyConfirm() ? '✓ Copiado!' : 'Copiar ID' }}
+          </button>
+        </div>
+        <button class="btn btn-enter" (click)="enterCreated()">
+          Entrar na chamada →
+        </button>
+      </div>
+    }
+
+    <div class="divider">— ou entrar em sessão existente —</div>
+
+    <label class="label">Session ID</label>
+    <input
+      class="input"
+      [ngModel]="sessionId()"
+      (ngModelChange)="sessionId.set($event)"
+      placeholder="cole o sessionId aqui"
+    />
+
+    <button class="btn btn-secondary" (click)="joinExisting()" [disabled]="loading()">
+      Entrar na sessão
+    </button>
+  </div>
+</div>
