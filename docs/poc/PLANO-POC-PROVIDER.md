@@ -1,10 +1,18 @@
 # Plano de PoC — GetStream Video (NestJS + React Native + Angular)
 
-> **Referência:** [SPIKE.md §9](../../SPIKE.md#9-escopo-do-poc-futuro-fase-pós-spike-arquitetural) · [ADR-003](../adr/ADR-003-provider-videoconsulta.md)
->
 > **Provider avaliado:** GetStream Video
 > **Stack:** NestJS (backend) · React Native / Expo (mobile, paciente) · Angular / `@stream-io/video-client` (web, médico)
 > **Objetivo:** confirmar que a nova arquitetura entrega sessão estável e anti-desencontro **by design**
+
+---
+
+## Documentação por módulo
+
+| Módulo                 | README                                       | Conteúdo                                                                                    |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Backend (NestJS)       | [backend/README.md](../../backend/README.md) | Contrato da API (exemplos de resposta), máquina de estados, webhook, `.env`, `notifyJoined` |
+| Mobile (React Native)  | [mobile/README.md](../../mobile/README.md)   | Dev build, URL do backend (emulador / LAN / USB), fluxo paciente, join → enable mídia       |
+| Web (Angular — médico) | [web/README.md](../../web/README.md)         | `ng serve`, `BACKEND_URL`, fluxo criar sessão → copiar ID → entrar, binding GetStream       |
 
 ---
 
@@ -15,14 +23,14 @@
 
 ### Resumo
 
-| Épico | Título | Prioridade | Status |
-|-------|--------|------------|--------|
-| [EPIC-POC-01](#epic-poc-01--backend--máquina-de-estados) | Backend — máquina de estados | Alta | ✅ |
-| [EPIC-POC-02](#epic-poc-02--anti-desencontro-c1) | Anti-desencontro (C1) | Alta | ✅ |
-| [EPIC-POC-03](#epic-poc-03--reconexão-em-rede-instável-c3) | Reconexão em rede instável (C3) | Alta | ✅ |
-| [EPIC-POC-04](#epic-poc-04--veto-pós-encerramento-c4) | Veto pós-encerramento (C4) | Alta | ✅ |
-| [EPIC-POC-05](#epic-poc-05--timeout-de-lobby-c2) | Timeout de lobby (C2) | Média | ✅ |
-| [EPIC-POC-06](#epic-poc-06--clientes-de-integração) | Clientes de integração | Alta / Média | ✅ |
+| Épico                                                      | Título                          | Prioridade   | Status |
+| ---------------------------------------------------------- | ------------------------------- | ------------ | ------ |
+| [EPIC-POC-01](#epic-poc-01--backend--máquina-de-estados)   | Backend — máquina de estados    | Alta         | ✅     |
+| [EPIC-POC-02](#epic-poc-02--anti-desencontro-c1)           | Anti-desencontro (C1)           | Alta         | ✅     |
+| [EPIC-POC-03](#epic-poc-03--reconexão-em-rede-instável-c3) | Reconexão em rede instável (C3) | Alta         | ✅     |
+| [EPIC-POC-04](#epic-poc-04--veto-pós-encerramento-c4)      | Veto pós-encerramento (C4)      | Alta         | ✅     |
+| [EPIC-POC-05](#epic-poc-05--timeout-de-lobby-c2)           | Timeout de lobby (C2)           | Média        | ✅     |
+| [EPIC-POC-06](#epic-poc-06--clientes-de-integração)        | Clientes de integração          | Alta / Média | ✅     |
 
 ---
 
@@ -39,6 +47,7 @@
 **Para** permitir que paciente e médico entrem na mesma consulta
 
 **Critérios de aceite:**
+
 - [x] `POST /sessions` retorna `sessionId`, `callId`, `callType`
 - [x] Estado inicial `criada`
 - [x] Gravação desabilitada na call (`recording: disabled`)
@@ -54,6 +63,7 @@
 **Para** ingressar na call com credencial válida
 
 **Critérios de aceite:**
+
 - [x] `GET /sessions/:id/token?userId=X&role=Y` retorna `token`, `callId`, `callType`, `apiKey`
 - [x] Backend faz `upsertUsers` antes de emitir token
 - [x] Participante registrado em `session.participants` ao solicitar token
@@ -69,6 +79,7 @@
 **Para** renderizar UI coerente com o backend (lobby, mídia pendente, ativa, encerrada, vetada)
 
 **Critérios de aceite:**
+
 - [x] `GET /sessions/:id` retorna `state`, `participants`, timestamps
 - [x] Clientes fazem poll a cada ~2–3 s
 
@@ -83,6 +94,7 @@
 **Para** transitar estados quando ngrok/webhook estiver configurado
 
 **Critérios de aceite:**
+
 - [x] `POST /webhooks/getstream` verifica assinatura
 - [x] `call.session_participant_joined` → `aguardando` / `midia_pendente`
 - [x] `call.session_participant_left` → `midia_pendente` (se `ativa`)
@@ -105,6 +117,7 @@
 **Para** refletir que dois lados estão na sala antes de validar mídia
 
 **Critérios de aceite:**
+
 - [x] 1º join → `aguardando`
 - [x] 2º join → `midia_pendente`
 - [x] Sinal via webhook ou `POST /sessions/:id/joined?userId=X`
@@ -120,6 +133,7 @@
 **Para** evitar “conectado na UI” sem áudio/vídeo bidirecional (anti-desencontro)
 
 **Critérios de aceite:**
+
 - [x] Cliente chama `/media-ready` ao detectar `publishedTracks` remoto (áudio + vídeo)
 - [x] Backend exige os **dois** participantes com `mediaReady=true`
 - [x] Com apenas um sinal, estado permanece `midia_pendente`
@@ -136,6 +150,7 @@
 **Para** validar integração ponta a ponta do fluxo C1
 
 **Critérios de aceite:**
+
 - [x] Vídeo e áudio visíveis em ambos os lados (teste manual web + mobile)
 - [ ] Sessão estável por **5 minutos** sem queda (teste prolongado pendente)
 
@@ -156,6 +171,7 @@
 **Para** exigir nova confirmação de mídia após reconexão
 
 **Critérios de aceite:**
+
 - [x] Webhook `participant_left` ou `POST /sessions/:id/left?userId=X` → `midia_pendente`
 - [x] `mediaReady` zerado para **todos** os participantes
 - [x] Nenhuma sessão duplicada criada
@@ -171,6 +187,7 @@
 **Para** retomar a videoconsulta sem novo `sessionId`
 
 **Critérios de aceite:**
+
 - [x] Reentrada possível na mesma `callId` (token novo se expirado)
 - [x] Clientes re-sinalizam `/media-ready` após detectar remoto novamente
 - [x] Backend transita `midia_pendente → ativa` após ambos sinalizarem
@@ -193,6 +210,7 @@
 **Para** impedir que o paciente retorne à mesma sessão
 
 **Critérios de aceite:**
+
 - [x] `POST /sessions/:id/end?veto=true` → estado `vetada`
 - [x] Backend chama `call.blockUser` para pacientes via GetStream SDK
 - [x] Backend chama `call.end()`
@@ -208,6 +226,7 @@
 **Para** garantir enforce da regra de negócio
 
 **Critérios de aceite:**
+
 - [x] `GET /sessions/:id/token?role=paciente` retorna **403** em sessão `vetada`
 - [x] Médico ainda pode obter token (laboratório)
 - [ ] GetStream rejeita join do paciente bloqueado (validar manualmente)
@@ -229,6 +248,7 @@
 **Para** fazer cleanup de consultas em que o segundo participante nunca entrou
 
 **Critérios de aceite:**
+
 - [x] Após `T_lobby` (padrão 2 min, configurável) → `encerrada`
 - [x] `call.end()` invocado no timeout
 - [x] Timeout cancelado ao atingir `ativa`
@@ -248,6 +268,7 @@
 **Para** validar SDK GetStream em Android (dev build)
 
 **Critérios de aceite:**
+
 - [x] Lobby: criar sessão (2 passos) ou entrar com `sessionId` compartilhado
 - [x] `StreamVideo` + `StreamCall` antes do join; permissões Android
 - [x] Sinaliza `/joined`, `/left`, `/media-ready`; poll de estado
@@ -264,6 +285,7 @@
 **Para** testar fluxo bipartido com paciente mobile
 
 **Critérios de aceite:**
+
 - [x] Lobby: criar sessão, copiar ID, entrar quando pronto
 - [x] `call.join` + `camera.enable` / `microphone.enable`
 - [x] Sinaliza `/joined`, `/left`, `/media-ready`; toggles mic/câmera
@@ -280,6 +302,7 @@
 **Para** regressão rápida sem dispositivos físicos
 
 **Critérios de aceite:**
+
 - [x] `./scripts/test-poc-scenarios.sh` passa 11/11 asserts
 - [x] Cobre fluxo completo C1, reconexão C3, veto C4
 
@@ -289,13 +312,13 @@
 
 ### Fora do escopo
 
-| Item | Motivo |
-|------|--------|
-| Reproduzir ou investigar desencontros do legado (Twilio) | PoC valida a solução nova, não o legado |
-| Grace period C3 | Adiado (SPIKE §3.2.2) |
-| Gravação de vídeo | Fora de escopo (SPIKE §0.4) |
-| Carga simultânea (pico) | Fase posterior |
-| Hardening de segurança (ex.: não expor `apiKey` ao browser em produção) | Laboratório — revisar em produção |
+| Item                                                                    | Motivo                                  |
+| ----------------------------------------------------------------------- | --------------------------------------- |
+| Reproduzir ou investigar desencontros do legado (Twilio)                | PoC valida a solução nova, não o legado |
+| Grace period C3                                                         | Adiado (SPIKE §3.2.2)                   |
+| Gravação de vídeo                                                       | Fora de escopo (SPIKE §0.4)             |
+| Carga simultânea (pico)                                                 | Fase posterior                          |
+| Hardening de segurança (ex.: não expor `apiKey` ao browser em produção) | Laboratório — revisar em produção       |
 
 ---
 
@@ -329,15 +352,15 @@ poc-video-conferencia/
 
 ### Dependências
 
-| Camada | Pacote | Finalidade |
-|--------|--------|------------|
-| Backend | `@stream-io/node-sdk` | SDK GetStream Video (server-side) |
-| Backend | `@nestjs/config` | Leitura do `.env` |
-| Mobile | `@stream-io/video-react-native-sdk` | SDK GetStream Video (React Native) |
-| Mobile | `@stream-io/react-native-webrtc`, `react-native-safe-area-context`, … | Peer / layout / permissões |
-| Mobile | `expo`, `expo-dev-client` | scaffold + development build |
-| Web | `@angular/*` | SPA médico |
-| Web | `@stream-io/video-client` | SDK GetStream Video (browser) |
+| Camada  | Pacote                                                                | Finalidade                         |
+| ------- | --------------------------------------------------------------------- | ---------------------------------- |
+| Backend | `@stream-io/node-sdk`                                                 | SDK GetStream Video (server-side)  |
+| Backend | `@nestjs/config`                                                      | Leitura do `.env`                  |
+| Mobile  | `@stream-io/video-react-native-sdk`                                   | SDK GetStream Video (React Native) |
+| Mobile  | `@stream-io/react-native-webrtc`, `react-native-safe-area-context`, … | Peer / layout / permissões         |
+| Mobile  | `expo`, `expo-dev-client`                                             | scaffold + development build       |
+| Web     | `@angular/*`                                                          | SPA médico                         |
+| Web     | `@stream-io/video-client`                                             | SDK GetStream Video (browser)      |
 
 ### Credenciais (`.env`)
 
@@ -358,16 +381,16 @@ criada → aguardando → mídia_pendente → ativa → encerrada
                                               ↘ vetada
 ```
 
-| Evento | Responsável | Transição |
-|--------|-------------|-----------|
-| Webhook `call.session_participant_joined` (1º participante) | GetStream → backend | `criada → aguardando` |
-| Webhook `call.session_participant_joined` (2º participante) | GetStream → backend | `aguardando → mídia_pendente` |
-| **`POST /sessions/:id/joined?userId=…`** (após ingresso efetivo no SDK) | Cliente RN/Web → backend | **PoC:** mesmo efeito que os webhooks de join quando o webhook ainda não está disponível ou chega tarde |
-| **`POST /sessions/:id/left?userId=…`** (queda/saída detectada no SDK) | Cliente RN/Web → backend | **PoC:** mesmo efeito que `call.session_participant_left` (C3) |
-| POST `/sessions/:id/media-ready` (ambos os participantes, estado `midia_pendente`) | Cliente → backend | `mídia_pendente → ativa` (exige ≥2 participantes) |
-| Webhook `call.session_participant_left` (1 participante sai) | GetStream → backend | `ativa → mídia_pendente` |
-| Webhook `call.session_ended` | GetStream → backend | `→ encerrada` |
-| POST `/sessions/:id/end?veto=true` | Cliente → backend | `→ vetada` |
+| Evento                                                                             | Responsável              | Transição                                                                                               |
+| ---------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Webhook `call.session_participant_joined` (1º participante)                        | GetStream → backend      | `criada → aguardando`                                                                                   |
+| Webhook `call.session_participant_joined` (2º participante)                        | GetStream → backend      | `aguardando → mídia_pendente`                                                                           |
+| **`POST /sessions/:id/joined?userId=…`** (após ingresso efetivo no SDK)            | Cliente RN/Web → backend | **PoC:** mesmo efeito que os webhooks de join quando o webhook ainda não está disponível ou chega tarde |
+| **`POST /sessions/:id/left?userId=…`** (queda/saída detectada no SDK)              | Cliente RN/Web → backend | **PoC:** mesmo efeito que `call.session_participant_left` (C3)                                          |
+| POST `/sessions/:id/media-ready` (ambos os participantes, estado `midia_pendente`) | Cliente → backend        | `mídia_pendente → ativa` (exige ≥2 participantes)                                                       |
+| Webhook `call.session_participant_left` (1 participante sai)                       | GetStream → backend      | `ativa → mídia_pendente`                                                                                |
+| Webhook `call.session_ended`                                                       | GetStream → backend      | `→ encerrada`                                                                                           |
+| POST `/sessions/:id/end?veto=true`                                                 | Cliente → backend        | `→ vetada`                                                                                              |
 
 > **Anti-desencontro:** os clientes só chamam `/media-ready` quando o lado remoto publica (ou quando o modelo de dados do SDK indica áudio+vídeo), conforme implementação atual (vide `publishedTracks` — na web pode refletir enum numérico ou equivalente textual). O backend só transita para `ativa` após confirmação dos **dois** participantes.
 
@@ -375,16 +398,16 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 
 ## 4. API Backend
 
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| `POST` | `/sessions` | Cria sessão + call GetStream; retorna `sessionId` e `callId` |
-| `GET` | `/sessions/:id/token?userId=X&role=Y` | Emite token GetStream para o participante |
-| `POST` | `/sessions/:id/media-ready?userId=X` | Sinaliza que mídia bidirecional está fluindo para este participante |
-| `POST` | `/sessions/:id/end?veto=false\|true` | Encerra (e opcionalmente veta) a sessão |
-| `GET` | `/sessions/:id` | Retorna estado atual (polling a cada ~2–3 s) |
-| `POST` | `/sessions/:id/joined?userId=X` | Sinalização de join no cliente (complementar aos webhooks na PoC) |
-| `POST` | `/sessions/:id/left?userId=X` | Sinalização de saída/queda (C3, complementar ao webhook na PoC) |
-| `POST` | `/webhooks/getstream` | Recebe e processa eventos do GetStream |
+| Método | Endpoint                              | Descrição                                                           |
+| ------ | ------------------------------------- | ------------------------------------------------------------------- |
+| `POST` | `/sessions`                           | Cria sessão + call GetStream; retorna `sessionId` e `callId`        |
+| `GET`  | `/sessions/:id/token?userId=X&role=Y` | Emite token GetStream para o participante                           |
+| `POST` | `/sessions/:id/media-ready?userId=X`  | Sinaliza que mídia bidirecional está fluindo para este participante |
+| `POST` | `/sessions/:id/end?veto=false\|true`  | Encerra (e opcionalmente veta) a sessão                             |
+| `GET`  | `/sessions/:id`                       | Retorna estado atual (polling a cada ~2–3 s)                        |
+| `POST` | `/sessions/:id/joined?userId=X`       | Sinalização de join no cliente (complementar aos webhooks na PoC)   |
+| `POST` | `/sessions/:id/left?userId=X`         | Sinalização de saída/queda (C3, complementar ao webhook na PoC)     |
+| `POST` | `/webhooks/getstream`                 | Recebe e processa eventos do GetStream                              |
 
 ---
 
@@ -422,6 +445,7 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 **Pré-condição:** médico em `web/`, paciente em `mobile/` (ou dois mobiles com roles distintos).
 
 **Passos:**
+
 1. `POST /sessions` → anotar `sessionId`
 2. Paciente: token + join → backend `aguardando`
 3. Médico: token + join → backend `midia_pendente`
@@ -430,13 +454,13 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 
 **Evidência:**
 
-| História | Verificação | Resultado | Data |
-|----------|-------------|-----------|------|
-| POC-05 | `aguardando` após 1º join | ✅ | 2026-05-25 |
-| POC-05 | `midia_pendente` após 2º join | ✅ | 2026-05-25 |
-| POC-06 | `ativa` só após ambos `/media-ready` | ✅ | 2026-05-25 |
-| POC-07 | Vídeo/áudio em ambos os lados | ✅ | 2026-05-25 |
-| POC-07 | Estável 5 min | ⬜ | |
+| História | Verificação                          | Resultado | Data       |
+| -------- | ------------------------------------ | --------- | ---------- |
+| POC-05   | `aguardando` após 1º join            | ✅        | 2026-05-25 |
+| POC-05   | `midia_pendente` após 2º join        | ✅        | 2026-05-25 |
+| POC-06   | `ativa` só após ambos `/media-ready` | ✅        | 2026-05-25 |
+| POC-07   | Vídeo/áudio em ambos os lados        | ✅        | 2026-05-25 |
+| POC-07   | Estável 5 min                        | ⬜        |            |
 
 ---
 
@@ -445,18 +469,19 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 **Pré-condição:** sessão `ativa` com dois participantes.
 
 **Passos:**
+
 1. Modo avião no dispositivo A → backend `midia_pendente` (webhook ou `/left`)
 2. Reativar rede; A reentra na mesma call
 3. Ambos re-sinalizam `/media-ready` → backend `ativa`
 
 **Evidência:**
 
-| História | Verificação | Resultado | Data |
-|----------|-------------|-----------|------|
-| POC-08 | `ativa → midia_pendente` na queda | ✅ | 2026-05-25 |
-| POC-09 | Reentrada na mesma `callId` | ✅ | 2026-05-25 |
-| POC-09 | `midia_pendente → ativa` após reconexão | ✅ | 2026-05-25 |
-| POC-08 | Sem sessão duplicada | ✅ | 2026-05-25 |
+| História | Verificação                             | Resultado | Data       |
+| -------- | --------------------------------------- | --------- | ---------- |
+| POC-08   | `ativa → midia_pendente` na queda       | ✅        | 2026-05-25 |
+| POC-09   | Reentrada na mesma `callId`             | ✅        | 2026-05-25 |
+| POC-09   | `midia_pendente → ativa` após reconexão | ✅        | 2026-05-25 |
+| POC-08   | Sem sessão duplicada                    | ✅        | 2026-05-25 |
 
 ---
 
@@ -465,17 +490,18 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 **Pré-condição:** sessão `ativa` ou `aguardando`.
 
 **Passos:**
+
 1. Médico: `POST /sessions/:id/end?veto=true` → `vetada`
 2. Paciente tenta novo token → **403**
 3. Validar bloqueio no GetStream (POC-11 pendente)
 
 **Evidência:**
 
-| História | Verificação | Resultado | Data |
-|----------|-------------|-----------|------|
-| POC-10 | Estado `vetada` | ✅ | 2026-05-25 |
-| POC-11 | HTTP 403 para paciente | ✅ | 2026-05-25 |
-| POC-11 | GetStream rejeita join | ⬜ | |
+| História | Verificação            | Resultado | Data       |
+| -------- | ---------------------- | --------- | ---------- |
+| POC-10   | Estado `vetada`        | ✅        | 2026-05-25 |
+| POC-11   | HTTP 403 para paciente | ✅        | 2026-05-25 |
+| POC-11   | GetStream rejeita join | ⬜        |            |
 
 ---
 
@@ -484,41 +510,42 @@ criada → aguardando → mídia_pendente → ativa → encerrada
 **Pré-condição:** apenas um participante entra; segundo não aparece.
 
 **Passos:**
+
 1. Paciente entra → `aguardando`
 2. Aguardar `LOBBY_TIMEOUT_MS` (2 min) → `encerrada` + `call.end()`
 
 **Evidência:**
 
-| História | Verificação | Resultado | Data |
-|----------|-------------|-----------|------|
-| POC-12 | Timeout `aguardando → encerrada` | ✅ | 2026-05-25 |
-| POC-12 | Call GetStream encerrada | ✅ | 2026-05-25 |
+| História | Verificação                      | Resultado | Data       |
+| -------- | -------------------------------- | --------- | ---------- |
+| POC-12   | Timeout `aguardando → encerrada` | ✅        | 2026-05-25 |
+| POC-12   | Call GetStream encerrada         | ✅        | 2026-05-25 |
 
 ---
 
 ## 7. Registro de resultados (por história)
 
-| História | Épico | Cenário | Resultado | Data | Evidência |
-|----------|-------|---------|-----------|------|-----------|
-| POC-05 | EPIC-POC-02 | C1 lobby | ✅ | 2026-05-25 | script + manual |
-| POC-06 | EPIC-POC-02 | C1 anti-desencontro | ✅ | 2026-05-25 | `scripts/test-poc-scenarios.sh` |
-| POC-07 | EPIC-POC-02 | C1 5 min estável | ⬜ | | manual prolongado |
-| POC-08 | EPIC-POC-03 | C3 queda | ✅ | 2026-05-25 | script |
-| POC-09 | EPIC-POC-03 | C3 reconexão | ✅ | 2026-05-25 | script + clientes |
-| POC-10 | EPIC-POC-04 | C4 veto | ✅ | 2026-05-25 | script |
-| POC-11 | EPIC-POC-04 | C4 block GetStream | ⬜ | | manual |
-| POC-12 | EPIC-POC-05 | C2 timeout | ✅ | 2026-05-25 | logs backend |
-| POC-13 | EPIC-POC-06 | Mobile RN | ✅ | 2026-05-25 | sessões reais |
-| POC-14 | EPIC-POC-06 | Web Angular | ✅ | 2026-05-25 | sessões reais |
-| POC-15 | EPIC-POC-06 | Script regressão | ✅ | 2026-05-25 | 11/11 asserts |
+| História | Épico       | Cenário             | Resultado | Data       | Evidência                       |
+| -------- | ----------- | ------------------- | --------- | ---------- | ------------------------------- |
+| POC-05   | EPIC-POC-02 | C1 lobby            | ✅        | 2026-05-25 | script + manual                 |
+| POC-06   | EPIC-POC-02 | C1 anti-desencontro | ✅        | 2026-05-25 | `scripts/test-poc-scenarios.sh` |
+| POC-07   | EPIC-POC-02 | C1 5 min estável    | ⬜        |            | manual prolongado               |
+| POC-08   | EPIC-POC-03 | C3 queda            | ✅        | 2026-05-25 | script                          |
+| POC-09   | EPIC-POC-03 | C3 reconexão        | ✅        | 2026-05-25 | script + clientes               |
+| POC-10   | EPIC-POC-04 | C4 veto             | ✅        | 2026-05-25 | script                          |
+| POC-11   | EPIC-POC-04 | C4 block GetStream  | ⬜        |            | manual                          |
+| POC-12   | EPIC-POC-05 | C2 timeout          | ✅        | 2026-05-25 | logs backend                    |
+| POC-13   | EPIC-POC-06 | Mobile RN           | ✅        | 2026-05-25 | sessões reais                   |
+| POC-14   | EPIC-POC-06 | Web Angular         | ✅        | 2026-05-25 | sessões reais                   |
+| POC-15   | EPIC-POC-06 | Script regressão    | ✅        | 2026-05-25 | 11/11 asserts                   |
 
 ---
 
 ## 8. Conclusão (preencher ao final)
 
 > **Provider avaliado:** GetStream Video
-> **Período:** ___
-> **Responsável:** ___
+> **Período:** **\_
+> **Responsável:** \_**
 
 ### Resultado geral
 
@@ -545,8 +572,8 @@ _Preencher após execução._
 
 ## Histórico
 
-| Data | Autor | Alteração |
-|------|-------|-----------|
-| 2026-05-25 | | Criação do plano de PoC |
-| 2026-05-25 | | Stack Angular (médico), endpoint `/joined`, alinhamento de estrutura e fluxos ao repositório atual |
-| 2026-05-25 | | Escopo reestruturado em Épicos (EPIC-POC-01…06) e Histórias (POC-01…15) |
+| Data       | Autor | Alteração                                                                                          |
+| ---------- | ----- | -------------------------------------------------------------------------------------------------- |
+| 2026-05-25 |       | Criação do plano de PoC                                                                            |
+| 2026-05-25 |       | Stack Angular (médico), endpoint `/joined`, alinhamento de estrutura e fluxos ao repositório atual |
+| 2026-05-25 |       | Escopo reestruturado em Épicos (EPIC-POC-01…06) e Histórias (POC-01…15)                            |
