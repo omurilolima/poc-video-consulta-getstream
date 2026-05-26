@@ -65,43 +65,290 @@ O servidor sobe em `http://localhost:3000`.
 
 ---
 
-## API — sessões
+## Contrato da API
 
-| Método | Endpoint | Descrição |
-| ------ | -------- | --------- |
-| `POST` | `/sessions` | Cria sessão + call GetStream; retorna `sessionId`, `callId`, `callType` |
-| `GET`  | `/sessions/:id` | Estado atual da sessão (polling pelos clientes) |
-| `GET`  | `/sessions/:id/token?userId=X&role=paciente\|medico` | Token GetStream + `callId`, `callType`, `apiKey` |
-| `POST` | `/sessions/:id/joined?userId=X` | **PoC:** cliente sinaliza que ingressou na call (transições compatíveis com `onParticipantJoined`) |
-| `POST` | `/sessions/:id/media-ready?userId=X` | Participante confirma recebimento de áudio+vídeo do outro lado |
-| `POST` | `/sessions/:id/end?veto=true\|false` | Encerra a sessão; `veto=true` aplica regra C4 no backend/GetStream |
+**Base URL (dev):** `http://localhost:3000`
 
-## API — webhook (outro controller)
+Todos os endpoints de sessão usam `:id` = `sessionId` (UUID retornado em `POST /sessions`).
 
-| Método | Endpoint | Descrição |
-| ------ | --------- | --------- |
-| `POST` | `/webhooks/getstream` | Eventos GetStream assinados; complementa transições (ex.: participant left / session ended) |
+### Tipos compartilhados
 
-### Exemplo: criar sessão e usar token
+**`SessionState`:** `criada` · `aguardando` · `midia_pendente` · `ativa` · `encerrada` · `vetada`
+
+**`ParticipantRole`:** `paciente` · `medico`
+
+**Objeto `Session` (retornado por vários endpoints):**
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default",
+  "state": "midia_pendente",
+  "participants": [
+    {
+      "userId": "medico-01",
+      "role": "medico",
+      "joinedAt": "2026-05-25T18:30:00.000Z",
+      "mediaReady": false
+    },
+    {
+      "userId": "paciente-01",
+      "role": "paciente",
+      "joinedAt": "2026-05-25T18:30:12.000Z",
+      "mediaReady": true
+    }
+  ],
+  "createdAt": "2026-05-25T18:29:45.000Z",
+  "updatedAt": "2026-05-25T18:30:15.000Z"
+}
+```
+
+**Erros (formato NestJS):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Session a1b2c3d4-... not found",
+  "error": "Not Found"
+}
+```
+
+| HTTP | Quando |
+| ---- | ------ |
+| `400 Bad Request` | Query obrigatória ausente ou `role` inválido |
+| `403 Forbidden` | Token negado (sessão encerrada/vetada; paciente em sessão vetada) |
+| `404 Not Found` | `sessionId` ou `userId` inexistente |
+| `401 Unauthorized` | Assinatura inválida no webhook GetStream |
+
+---
+
+### `POST /sessions`
+
+Cria sessão e a call correspondente no GetStream (`callType: default`).
+
+**Request:** body vazio `{}` (ou omitido).
+
+**Response `201 Created`:**
+
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default"
+}
+```
+
+---
+
+### `GET /sessions/:id`
+
+Retorna o estado atual — usado pelos clientes em polling (~2–3 s).
+
+**Response `200 OK`:** objeto `Session` (ver acima).
+
+**Exemplo — sessão recém-criada, ninguém entrou ainda:**
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default",
+  "state": "criada",
+  "participants": [],
+  "createdAt": "2026-05-25T18:29:45.000Z",
+  "updatedAt": "2026-05-25T18:29:45.000Z"
+}
+```
+
+---
+
+### `GET /sessions/:id/token`
+
+Emite token GetStream para o participante ingressar na call via SDK.
+
+**Query params (obrigatórios):**
+
+| Param | Tipo | Descrição |
+| ----- | ---- | --------- |
+| `userId` | string | Identificador estável do usuário (ex.: `medico-01`) |
+| `role` | `paciente` \| `medico` | Papel na sessão; usado para regras de veto (C4) |
+
+**Response `200 OK`:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default",
+  "apiKey": "sua_getstream_api_key"
+}
+```
+
+> Na PoC o `apiKey` é exposto ao cliente para inicializar o SDK — aceitável em laboratório.
+
+**Response `403 Forbidden` — sessão vetada, paciente tentando reentrar:**
+
+```json
+{
+  "statusCode": 403,
+  "message": "Session is vetoed — patient cannot rejoin",
+  "error": "Forbidden"
+}
+```
+
+---
+
+### `POST /sessions/:id/joined`
+
+**PoC:** cliente sinaliza que fez `call.join()` no SDK. Replica `call.session_participant_joined` quando webhook/ngrok não está configurado.
+
+**Query params:** `userId` (obrigatório)
+
+**Transições:** `criada → aguardando` (1º join) · `aguardando → midia_pendente` (2º join)
+
+**Response `200 OK`:** objeto `Session` atualizado.
+
+**Exemplo — após o segundo participante entrar:**
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default",
+  "state": "midia_pendente",
+  "participants": [
+    { "userId": "medico-01", "role": "medico", "joinedAt": "2026-05-25T18:30:00.000Z", "mediaReady": false },
+    { "userId": "paciente-01", "role": "paciente", "joinedAt": "2026-05-25T18:30:12.000Z", "mediaReady": false }
+  ],
+  "createdAt": "2026-05-25T18:29:45.000Z",
+  "updatedAt": "2026-05-25T18:30:12.000Z"
+}
+```
+
+---
+
+### `POST /sessions/:id/left`
+
+**PoC:** cliente sinaliza que o participante remoto saiu ou caiu (C3). Replica `call.session_participant_left`.
+
+**Query params:** `userId` (obrigatório) — ID do participante que **saiu** (não quem detectou a queda).
+
+**Transição:** se `state === ativa` → `midia_pendente` e `mediaReady` de todos resetado.
+
+**Response `200 OK`:** objeto `Session` atualizado.
+
+---
+
+### `POST /sessions/:id/media-ready`
+
+Participante confirma que está **recebendo** áudio **e** vídeo do outro lado (clientes disparam após detectar `publishedTracks` remotos).
+
+**Query params:** `userId` (obrigatório)
+
+**Transição:** quando **ambos** os participantes registrados têm `mediaReady: true` e `state === midia_pendente` → `ativa`.
+
+**Response `200 OK`:**
+
+```json
+{
+  "state": "ativa"
+}
+```
+
+Enquanto só um lado sinalizou, `state` permanece `midia_pendente`:
+
+```json
+{
+  "state": "midia_pendente"
+}
+```
+
+---
+
+### `POST /sessions/:id/end`
+
+Encerra a sessão no backend e chama `call.end()` no GetStream.
+
+**Query params:**
+
+| Param | Valores | Efeito |
+| ----- | ------- | ------ |
+| `veto` | `true` | C4: `state → vetada`, bloqueia pacientes no GetStream |
+| `veto` | `false` ou omitido | `state → encerrada` |
+
+**Response `200 OK`:** objeto `Session` final.
+
+**Exemplo — encerramento com veto:**
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callId": "consulta-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "callType": "default",
+  "state": "vetada",
+  "participants": [ "..." ],
+  "createdAt": "2026-05-25T18:29:45.000Z",
+  "updatedAt": "2026-05-25T18:45:00.000Z"
+}
+```
+
+---
+
+### `POST /webhooks/getstream`
+
+Recebe eventos assinados do GetStream Dashboard. Complementa (ou substitui) os sinais `/joined` e `/left` da PoC.
+
+**Headers:** `x-signature` — HMAC validado com `getstream_api_secret`.
+
+**Body:** JSON do evento GetStream. O backend extrai `sessionId` de `call.custom.sessionId`.
+
+**Eventos tratados:**
+
+| Evento | Ação |
+| ------ | ---- |
+| `call.session_participant_joined` | Igual a `POST /joined` |
+| `call.session_participant_left` | Igual a `POST /left` |
+| `call.session_ended` / `call.ended` | `→ encerrada` |
+
+**Response `200 OK`:**
+
+```json
+{
+  "ok": true
+}
+```
+
+---
+
+### Fluxo completo (curl)
+
+Substitua `{sessionId}` pelo UUID retornado em `POST /sessions`.
 
 ```bash
-curl -X POST http://localhost:3000/sessions \
+# 1. Criar sessão
+curl -s -X POST http://localhost:3000/sessions \
   -H "Content-Type: application/json" -d '{}'
 
-# Obter token
-curl "http://localhost:3000/sessions/{sessionId}/token?userId=paciente-01&role=paciente"
+# 2. Token do médico
+curl -s "http://localhost:3000/sessions/{sessionId}/token?userId=medico-01&role=medico"
 
-# Opcional PoC — após join no SDK no cliente:
-curl -X POST "http://localhost:3000/sessions/{sessionId}/joined?userId=paciente-01" \
-  -H "Content-Type: application/json" -d '{}'
+# 3. Token do paciente
+curl -s "http://localhost:3000/sessions/{sessionId}/token?userId=paciente-01&role=paciente"
 
-# Sinalizar mídia pronta (quando aplicável ao fluxo)
-curl -X POST "http://localhost:3000/sessions/{sessionId}/media-ready?userId=paciente-01" \
-  -H "Content-Type: application/json" -d '{}'
+# 4. Após call.join() no cliente (PoC)
+curl -s -X POST "http://localhost:3000/sessions/{sessionId}/joined?userId=medico-01"
+curl -s -X POST "http://localhost:3000/sessions/{sessionId}/joined?userId=paciente-01"
 
-# Encerrar com veto (C4)
-curl -X POST "http://localhost:3000/sessions/{sessionId}/end?veto=true" \
-  -H "Content-Type: application/json" -d '{}'
+# 5. Quando cada lado recebe mídia do outro
+curl -s -X POST "http://localhost:3000/sessions/{sessionId}/media-ready?userId=medico-01"
+curl -s -X POST "http://localhost:3000/sessions/{sessionId}/media-ready?userId=paciente-01"
+
+# 6. Polling de estado
+curl -s "http://localhost:3000/sessions/{sessionId}"
+
+# 7. Encerrar com veto (C4)
+curl -s -X POST "http://localhost:3000/sessions/{sessionId}/end?veto=true"
 ```
 
 ---
